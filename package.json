@@ -1,0 +1,27 @@
+{
+  "name": "smart-accounting",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "test:amounts": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/amountParser.test.mjs",
+    "test:original": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/originalText.test.mjs",
+    "test:parser": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-specifier-resolution=node --test tests/parseNaturalLanguage.test.mjs"
+  },
+  "dependencies": {
+    "next": "16.2.9",
+    "react": "19.2.7",
+    "react-dom": "19.2.7"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.1",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
+    "eslint": "9.39.1",
+    "eslint-config-next": "16.2.9",
+    "typescript": "5.9.3"
+  }
+}
