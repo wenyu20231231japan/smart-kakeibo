@@ -428,6 +428,61 @@ select:focus {
   margin-bottom: 4px;
 }
 
+.data-safety-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.data-safety-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.data-safety-header h2 {
+  margin-bottom: 6px;
+}
+
+.data-safety-header p,
+.data-safety-note {
+  margin-bottom: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.storage-badge {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 7px 10px;
+  background: var(--surface-soft);
+  color: var(--text);
+}
+
+.storage-badge.cloud {
+  background: rgba(23, 105, 79, 0.12);
+  color: var(--primary);
+}
+
+.storage-badge.fallback {
+  background: #fff6d6;
+  color: #7a5800;
+}
+
+.backup-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.backup-actions .ghost-button {
+  width: 100%;
+}
+
+.backup-file-input {
+  display: none;
+}
+
 .image-upload-row {
   display: flex;
   align-items: center;

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { BilingualText } from "@/components/BilingualText";
+import { DataSafetyPanel, type StorageStatus } from "@/components/DataSafetyPanel";
 import { LegacyMigrationPanel } from "@/components/LegacyMigrationPanel";
 import { MonthlySummary } from "@/components/MonthlySummary";
 import { NaturalLanguageInput } from "@/components/NaturalLanguageInput";
@@ -12,10 +13,13 @@ import { calculateMonthlySummary } from "@/lib/calculations/monthlySummary";
 import { parseNaturalLanguage } from "@/lib/parser/parseNaturalLanguage";
 import {
   addTransactions,
+  createTransactionsBackup,
   deleteTransaction,
+  getLocalStorageKey,
   getPendingLegacyTransactions,
   isSupabaseConfigured,
   migrateLegacyTransactions,
+  parseBackupTransactions,
   readTransactions,
   type MigrationResult
 } from "@/lib/storage/transactionStorage";
@@ -38,6 +42,8 @@ export default function Home() {
   const [isMigrating, setIsMigrating] = useState(false);
   const [migrationResult, setMigrationResult] = useState<Omit<MigrationResult, "transactions"> | undefined>();
   const [isCloudEnabled, setIsCloudEnabled] = useState(false);
+  const [storageStatus, setStorageStatus] = useState<StorageStatus>("local");
+  const [importResult, setImportResult] = useState<{ importedCount: number; skippedCount: number } | undefined>();
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -49,6 +55,7 @@ export default function Home() {
       if (isMounted) {
         setTransactions(result.transactions);
         setIsCloudEnabled(result.mode === "supabase");
+        setStorageStatus(result.mode === "supabase" ? "cloud" : isSupabaseConfigured() ? "fallback" : "local");
         setPendingLegacyCount(result.mode === "supabase" ? getPendingLegacyTransactions(result.transactions).length : 0);
         setError(result.message ?? "");
         setIsLoadingTransactions(false);
@@ -121,6 +128,7 @@ export default function Home() {
       const result = await addTransactions(nextTransactions, transactions);
       setTransactions(result.transactions);
       setIsCloudEnabled(result.mode === "supabase");
+      setStorageStatus(result.cloudSynced ? "cloud" : isSupabaseConfigured() ? "fallback" : "local");
       setPendingLegacyCount(result.mode === "supabase" ? getPendingLegacyTransactions(result.transactions).length : 0);
       setSelectedTransactionId(nextTransactions[0]?.id ?? selectedTransactionId);
       setInput("");
@@ -148,6 +156,8 @@ export default function Home() {
     try {
       const result = await migrateLegacyTransactions(transactions);
       setTransactions(result.transactions);
+      setIsCloudEnabled(true);
+      setStorageStatus("cloud");
       setPendingLegacyCount(getPendingLegacyTransactions(result.transactions).length);
       setMigrationResult({
         successCount: result.successCount,
@@ -189,6 +199,55 @@ export default function Home() {
     setImageDataUrls((current) => current.filter((_, itemIndex) => itemIndex !== index));
   }
 
+  function handleExportBackup() {
+    if (transactions.length === 0) {
+      setError("書き出す記録がありません / 当前没有可导出的记录。");
+      return;
+    }
+
+    const backup = createTransactionsBackup(transactions);
+    const backupUrl = URL.createObjectURL(
+      new Blob([JSON.stringify(backup, null, 2)], {
+        type: "application/json"
+      })
+    );
+    const link = document.createElement("a");
+    link.href = backupUrl;
+    link.download = `smart-kakeibo-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    URL.revokeObjectURL(backupUrl);
+    setError("");
+  }
+
+  async function handleImportBackup(file: File) {
+    try {
+      const fileText = await file.text();
+      const preview = parseBackupTransactions(fileText, transactions);
+
+      if (preview.importedCount === 0) {
+        setImportResult({
+          importedCount: 0,
+          skippedCount: preview.skippedCount
+        });
+        setError("新しい記録はありません / 没有新的记录需要导入。");
+        return;
+      }
+
+      const result = await addTransactions(preview.transactions, transactions);
+      setTransactions(result.transactions);
+      setIsCloudEnabled(result.mode === "supabase");
+      setStorageStatus(result.cloudSynced ? "cloud" : isSupabaseConfigured() ? "fallback" : "local");
+      setPendingLegacyCount(result.mode === "supabase" ? getPendingLegacyTransactions(result.transactions).length : 0);
+      setImportResult({
+        importedCount: preview.importedCount,
+        skippedCount: preview.skippedCount
+      });
+      setError(result.message ?? "");
+    } catch {
+      setError("読み込みに失敗しました / 导入失败，请选择正确的 JSON 备份文件。");
+    }
+  }
+
   async function handleDelete(id: string) {
     const confirmed = window.confirm("この記録を削除しますか？ / 确定删除这条记录吗？");
     if (!confirmed) {
@@ -199,6 +258,7 @@ export default function Home() {
       const result = await deleteTransaction(id, transactions);
       setTransactions(result.transactions);
       setIsCloudEnabled(result.mode === "supabase");
+      setStorageStatus(result.mode === "supabase" ? "cloud" : isSupabaseConfigured() ? "fallback" : "local");
       setPendingLegacyCount(result.mode === "supabase" ? getPendingLegacyTransactions(result.transactions).length : 0);
       if (selectedTransactionId === id) {
         setSelectedTransactionId(result.transactions[0]?.id ?? "");
@@ -238,6 +298,15 @@ export default function Home() {
           </header>
 
           <MonthlySummary summary={summary} />
+
+          <DataSafetyPanel
+            status={storageStatus}
+            recordCount={transactions.length}
+            localStorageKey={getLocalStorageKey()}
+            importResult={importResult}
+            onExport={handleExportBackup}
+            onImport={handleImportBackup}
+          />
 
           {isCloudEnabled ? (
             <LegacyMigrationPanel

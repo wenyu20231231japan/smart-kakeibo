@@ -20,6 +20,7 @@ const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const TABLE_NAME = "transactions";
 const LEGACY_STORAGE_KEY = "smart-accounting-transactions";
 const MIGRATED_STORAGE_KEY = "smart-accounting-transactions-migrated-ids";
+const BACKUP_VERSION = 1;
 
 export type MigrationResult = {
   successCount: number;
@@ -38,6 +39,20 @@ export type TransactionStorageResult = {
 
 export type SaveTransactionsResult = TransactionStorageResult & {
   cloudSynced: boolean;
+};
+
+export type TransactionsBackup = {
+  app: "smart-kakeibo";
+  version: number;
+  exportedAt: string;
+  storageKey: typeof LEGACY_STORAGE_KEY;
+  transactions: Transaction[];
+};
+
+export type BackupImportPreview = {
+  transactions: Transaction[];
+  importedCount: number;
+  skippedCount: number;
 };
 
 function getSupabaseConfig() {
@@ -98,6 +113,7 @@ function toRow(transaction: Transaction): TransactionRow {
 function normalizeLegacyTransaction(transaction: Transaction): Transaction {
   return {
     ...transaction,
+    amount: Number(transaction.amount),
     merchant: transaction.merchant ?? "",
     note: transaction.note ?? "",
     imageDataUrls: transaction.imageDataUrls ?? []
@@ -138,6 +154,30 @@ function mergeTransactions(nextTransactions: Transaction[], currentTransactions:
     ...nextTransactions.map(normalizeLegacyTransaction),
     ...currentTransactions.filter((transaction) => !nextIds.has(transaction.id))
   ]);
+}
+
+function isTransactionLike(value: unknown): value is Transaction {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const transaction = value as Partial<Transaction>;
+
+  return (
+    typeof transaction.id === "string" &&
+    (transaction.type === "income" || transaction.type === "expense") &&
+    typeof transaction.amount === "number" &&
+    typeof transaction.currency === "string" &&
+    typeof transaction.category === "string" &&
+    typeof transaction.date === "string" &&
+    typeof transaction.originalText === "string" &&
+    typeof transaction.createdAt === "string" &&
+    typeof transaction.updatedAt === "string"
+  );
+}
+
+export function getLocalStorageKey() {
+  return LEGACY_STORAGE_KEY;
 }
 
 export function isSupabaseConfigured() {
@@ -277,6 +317,49 @@ export function markLegacyTransactionsMigrated(ids: string[]) {
 
   const mergedIds = [...new Set([...readMigratedLegacyIds(), ...ids])];
   window.localStorage.setItem(MIGRATED_STORAGE_KEY, JSON.stringify(mergedIds));
+}
+
+export function createTransactionsBackup(transactions: Transaction[]): TransactionsBackup {
+  return {
+    app: "smart-kakeibo",
+    version: BACKUP_VERSION,
+    exportedAt: new Date().toISOString(),
+    storageKey: LEGACY_STORAGE_KEY,
+    transactions: sortTransactions(transactions).map(normalizeLegacyTransaction)
+  };
+}
+
+export function parseBackupTransactions(fileText: string, currentTransactions: Transaction[]): BackupImportPreview {
+  const parsed = JSON.parse(fileText) as unknown;
+  const candidateTransactions = Array.isArray(parsed)
+    ? parsed
+    : parsed && typeof parsed === "object" && "transactions" in parsed
+      ? (parsed as { transactions?: unknown }).transactions
+      : undefined;
+
+  if (!Array.isArray(candidateTransactions)) {
+    throw new Error("Backup file does not contain transactions.");
+  }
+
+  const currentIds = new Set(currentTransactions.map((transaction) => transaction.id));
+  const importedIds = new Set<string>();
+  const transactions = candidateTransactions
+    .filter(isTransactionLike)
+    .map(normalizeLegacyTransaction)
+    .filter((transaction) => {
+      if (currentIds.has(transaction.id) || importedIds.has(transaction.id)) {
+        return false;
+      }
+
+      importedIds.add(transaction.id);
+      return true;
+    });
+
+  return {
+    transactions,
+    importedCount: transactions.length,
+    skippedCount: candidateTransactions.length - transactions.length
+  };
 }
 
 export function getPendingLegacyTransactions(existingTransactions: Transaction[] = []) {
