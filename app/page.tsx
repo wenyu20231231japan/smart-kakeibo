@@ -14,6 +14,7 @@ import {
   addTransactions,
   deleteTransaction,
   getPendingLegacyTransactions,
+  isSupabaseConfigured,
   migrateLegacyTransactions,
   readTransactions,
   type MigrationResult
@@ -36,28 +37,21 @@ export default function Home() {
   const [pendingLegacyCount, setPendingLegacyCount] = useState(0);
   const [isMigrating, setIsMigrating] = useState(false);
   const [migrationResult, setMigrationResult] = useState<Omit<MigrationResult, "transactions"> | undefined>();
+  const [isCloudEnabled, setIsCloudEnabled] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
     let isMounted = true;
 
     async function loadTransactions() {
-      try {
-        const savedTransactions = await readTransactions();
+      const result = await readTransactions();
 
-        if (isMounted) {
-          setTransactions(savedTransactions);
-          setPendingLegacyCount(getPendingLegacyTransactions(savedTransactions).length);
-          setError("");
-        }
-      } catch {
-        if (isMounted) {
-          setError("Supabase設定を確認してください / 请检查 Supabase 环境变量和数据表设置。");
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoadingTransactions(false);
-        }
+      if (isMounted) {
+        setTransactions(result.transactions);
+        setIsCloudEnabled(result.mode === "supabase");
+        setPendingLegacyCount(result.mode === "supabase" ? getPendingLegacyTransactions(result.transactions).length : 0);
+        setError(result.message ?? "");
+        setIsLoadingTransactions(false);
       }
     }
 
@@ -124,23 +118,30 @@ export default function Home() {
     setIsSaving(true);
 
     try {
-      const updatedTransactions = await addTransactions(nextTransactions);
-      setTransactions(updatedTransactions);
+      const result = await addTransactions(nextTransactions, transactions);
+      setTransactions(result.transactions);
+      setIsCloudEnabled(result.mode === "supabase");
+      setPendingLegacyCount(result.mode === "supabase" ? getPendingLegacyTransactions(result.transactions).length : 0);
       setSelectedTransactionId(nextTransactions[0]?.id ?? selectedTransactionId);
       setInput("");
       setImageDataUrls([]);
       setDrafts([]);
       setParsedOriginalText("");
       setParsedImageDataUrls([]);
-      setError("");
+      setError(result.message ?? "");
     } catch {
-      setError("保存に失敗しました / 保存失败，请检查 Supabase 设置。");
+      setError("保存に失敗しました / 保存失败，请稍后再试。");
     } finally {
       setIsSaving(false);
     }
   }
 
   async function handleMigrateLegacyTransactions() {
+    if (!isSupabaseConfigured()) {
+      setError("已保存到本地，云同步未启用。");
+      return;
+    }
+
     setIsMigrating(true);
     setMigrationResult(undefined);
 
@@ -195,14 +196,16 @@ export default function Home() {
     }
 
     try {
-      const updatedTransactions = await deleteTransaction(id);
-      setTransactions(updatedTransactions);
+      const result = await deleteTransaction(id, transactions);
+      setTransactions(result.transactions);
+      setIsCloudEnabled(result.mode === "supabase");
+      setPendingLegacyCount(result.mode === "supabase" ? getPendingLegacyTransactions(result.transactions).length : 0);
       if (selectedTransactionId === id) {
-        setSelectedTransactionId(updatedTransactions[0]?.id ?? "");
+        setSelectedTransactionId(result.transactions[0]?.id ?? "");
       }
-      setError("");
+      setError(result.message ?? "");
     } catch {
-      setError("削除に失敗しました / 删除失败，请检查 Supabase 设置。");
+      setError("削除に失敗しました / 删除失败，请稍后再试。");
     }
   }
 
@@ -236,12 +239,14 @@ export default function Home() {
 
           <MonthlySummary summary={summary} />
 
-          <LegacyMigrationPanel
-            pendingCount={pendingLegacyCount}
-            isMigrating={isMigrating}
-            result={migrationResult}
-            onMigrate={handleMigrateLegacyTransactions}
-          />
+          {isCloudEnabled ? (
+            <LegacyMigrationPanel
+              pendingCount={pendingLegacyCount}
+              isMigrating={isMigrating}
+              result={migrationResult}
+              onMigrate={handleMigrateLegacyTransactions}
+            />
+          ) : null}
 
           <NaturalLanguageInput
             value={input}
@@ -270,7 +275,7 @@ export default function Home() {
 
           {isLoadingTransactions ? (
             <section className="panel empty-detail">
-              <p>読み込み中... / 正在读取 Supabase 数据...</p>
+              <p>読み込み中... / 正在读取记账数据...</p>
             </section>
           ) : (
             <TransactionDetail transaction={selectedTransaction} onDelete={handleDelete} />

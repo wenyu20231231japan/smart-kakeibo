@@ -28,6 +28,18 @@ export type MigrationResult = {
   transactions: Transaction[];
 };
 
+export type StorageMode = "supabase" | "local";
+
+export type TransactionStorageResult = {
+  transactions: Transaction[];
+  mode: StorageMode;
+  message?: string;
+};
+
+export type SaveTransactionsResult = TransactionStorageResult & {
+  cloudSynced: boolean;
+};
+
 function getSupabaseConfig() {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     throw new Error("Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.");
@@ -101,7 +113,38 @@ async function parseResponse<T>(response: Response): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export async function readTransactions(): Promise<Transaction[]> {
+function sortTransactions(transactions: Transaction[]) {
+  return [...transactions].sort((a, b) => {
+    if (a.date === b.date) {
+      return b.createdAt.localeCompare(a.createdAt);
+    }
+
+    return b.date.localeCompare(a.date);
+  });
+}
+
+function writeLocalTransactions(transactions: Transaction[]) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem(LEGACY_STORAGE_KEY, JSON.stringify(sortTransactions(transactions)));
+}
+
+function mergeTransactions(nextTransactions: Transaction[], currentTransactions: Transaction[]) {
+  const nextIds = new Set(nextTransactions.map((transaction) => transaction.id));
+
+  return sortTransactions([
+    ...nextTransactions.map(normalizeLegacyTransaction),
+    ...currentTransactions.filter((transaction) => !nextIds.has(transaction.id))
+  ]);
+}
+
+export function isSupabaseConfigured() {
+  return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+}
+
+async function readSupabaseTransactions(): Promise<Transaction[]> {
   const { url } = getSupabaseConfig();
   const response = await fetch(`${url}/rest/v1/${TABLE_NAME}?select=*&order=date.desc,created_at.desc`, {
     headers: getHeaders()
@@ -111,7 +154,7 @@ export async function readTransactions(): Promise<Transaction[]> {
   return rows.map(toTransaction);
 }
 
-export async function addTransactions(nextTransactions: Transaction[]): Promise<Transaction[]> {
+async function addSupabaseTransactions(nextTransactions: Transaction[]): Promise<Transaction[]> {
   const { url } = getSupabaseConfig();
   const response = await fetch(`${url}/rest/v1/${TABLE_NAME}`, {
     method: "POST",
@@ -123,7 +166,80 @@ export async function addTransactions(nextTransactions: Transaction[]): Promise<
   });
   await parseResponse<TransactionRow[]>(response);
 
-  return readTransactions();
+  return readSupabaseTransactions();
+}
+
+async function deleteSupabaseTransaction(id: string): Promise<Transaction[]> {
+  const { url } = getSupabaseConfig();
+  const response = await fetch(`${url}/rest/v1/${TABLE_NAME}?id=eq.${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    headers: getHeaders()
+  });
+
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || `Supabase delete failed with status ${response.status}`);
+  }
+
+  return readSupabaseTransactions();
+}
+
+export async function readTransactions(): Promise<TransactionStorageResult> {
+  if (isSupabaseConfigured()) {
+    try {
+      return {
+        transactions: await readSupabaseTransactions(),
+        mode: "supabase"
+      };
+    } catch {
+      return {
+        transactions: readLegacyTransactions(),
+        mode: "local",
+        message: "已使用本地存储，云同步未启用。"
+      };
+    }
+  }
+
+  return {
+    transactions: readLegacyTransactions(),
+    mode: "local",
+    message: "已使用本地存储，云同步未启用。"
+  };
+}
+
+export async function addTransactions(
+  nextTransactions: Transaction[],
+  currentTransactions: Transaction[] = readLegacyTransactions()
+): Promise<SaveTransactionsResult> {
+  if (isSupabaseConfigured()) {
+    try {
+      return {
+        transactions: await addSupabaseTransactions(nextTransactions),
+        mode: "supabase",
+        cloudSynced: true
+      };
+    } catch {
+      const updatedTransactions = mergeTransactions(nextTransactions, currentTransactions);
+      writeLocalTransactions(updatedTransactions);
+
+      return {
+        transactions: updatedTransactions,
+        mode: "local",
+        cloudSynced: false,
+        message: "已保存到本地，云同步未启用。"
+      };
+    }
+  }
+
+  const updatedTransactions = mergeTransactions(nextTransactions, currentTransactions);
+  writeLocalTransactions(updatedTransactions);
+
+  return {
+    transactions: updatedTransactions,
+    mode: "local",
+    cloudSynced: false,
+    message: "已保存到本地，云同步未启用。"
+  };
 }
 
 export function readLegacyTransactions(): Transaction[] {
@@ -164,6 +280,10 @@ export function markLegacyTransactionsMigrated(ids: string[]) {
 }
 
 export function getPendingLegacyTransactions(existingTransactions: Transaction[] = []) {
+  if (!isSupabaseConfigured()) {
+    return [];
+  }
+
   const migratedIds = new Set(readMigratedLegacyIds());
   const existingIds = new Set(existingTransactions.map((transaction) => transaction.id));
 
@@ -173,6 +293,15 @@ export function getPendingLegacyTransactions(existingTransactions: Transaction[]
 }
 
 export async function migrateLegacyTransactions(existingTransactions: Transaction[] = []): Promise<MigrationResult> {
+  if (!isSupabaseConfigured()) {
+    return {
+      successCount: 0,
+      failedCount: 0,
+      skippedCount: readLegacyTransactions().length,
+      transactions: existingTransactions
+    };
+  }
+
   const pendingTransactions = getPendingLegacyTransactions(existingTransactions);
 
   if (pendingTransactions.length === 0) {
@@ -215,21 +344,38 @@ export async function migrateLegacyTransactions(existingTransactions: Transactio
     successCount: insertedIds.length,
     failedCount: 0,
     skippedCount: readLegacyTransactions().length - insertedIds.length,
-    transactions: await readTransactions()
+    transactions: await readSupabaseTransactions()
   };
 }
 
-export async function deleteTransaction(id: string): Promise<Transaction[]> {
-  const { url } = getSupabaseConfig();
-  const response = await fetch(`${url}/rest/v1/${TABLE_NAME}?id=eq.${encodeURIComponent(id)}`, {
-    method: "DELETE",
-    headers: getHeaders()
-  });
+export async function deleteTransaction(
+  id: string,
+  currentTransactions: Transaction[] = readLegacyTransactions()
+): Promise<TransactionStorageResult> {
+  if (isSupabaseConfigured()) {
+    try {
+      return {
+        transactions: await deleteSupabaseTransaction(id),
+        mode: "supabase"
+      };
+    } catch {
+      const updatedTransactions = currentTransactions.filter((transaction) => transaction.id !== id);
+      writeLocalTransactions(updatedTransactions);
 
-  if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || `Supabase delete failed with status ${response.status}`);
+      return {
+        transactions: updatedTransactions,
+        mode: "local",
+        message: "已从本地删除，云同步未启用。"
+      };
+    }
   }
 
-  return readTransactions();
+  const updatedTransactions = currentTransactions.filter((transaction) => transaction.id !== id);
+  writeLocalTransactions(updatedTransactions);
+
+  return {
+    transactions: updatedTransactions,
+    mode: "local",
+    message: "已从本地删除，云同步未启用。"
+  };
 }
