@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { AuthPanel } from "@/components/AuthPanel";
 import { BilingualText } from "@/components/BilingualText";
 import { DataSafetyPanel, type StorageStatus } from "@/components/DataSafetyPanel";
 import { LegacyMigrationPanel } from "@/components/LegacyMigrationPanel";
@@ -21,9 +22,19 @@ import {
   migrateLegacyTransactions,
   parseBackupTransactions,
   readTransactions,
+  updateTransaction,
   type MigrationResult
 } from "@/lib/storage/transactionStorage";
 import { buildTransactionsFromDrafts } from "@/lib/transactions/buildTransactions";
+import {
+  clearStoredSession,
+  isAuthConfigured,
+  readSessionFromUrl,
+  readStoredSession,
+  refreshSessionIfNeeded,
+  sendLoginEmail,
+  type AuthSession
+} from "@/lib/auth/supabaseAuth";
 import { compressImage } from "@/lib/images/compressImage";
 import type { ParsedTransactionDraft, Transaction } from "@/types/transaction";
 
@@ -38,31 +49,62 @@ export default function Home() {
   const [selectedTransactionId, setSelectedTransactionId] = useState<string>("");
   const [isLoadingTransactions, setIsLoadingTransactions] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
   const [pendingLegacyCount, setPendingLegacyCount] = useState(0);
   const [isMigrating, setIsMigrating] = useState(false);
   const [migrationResult, setMigrationResult] = useState<Omit<MigrationResult, "transactions"> | undefined>();
   const [isCloudEnabled, setIsCloudEnabled] = useState(false);
   const [storageStatus, setStorageStatus] = useState<StorageStatus>("local");
   const [importResult, setImportResult] = useState<{ importedCount: number; skippedCount: number } | undefined>();
+  const [session, setSession] = useState<AuthSession | null>(null);
+  const [authMessage, setAuthMessage] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
     let isMounted = true;
 
-    async function loadTransactions() {
-      const result = await readTransactions();
+    async function initialize() {
+      try {
+        if (!isAuthConfigured()) {
+          setAuthMessage("Supabase環境変数が未設定です / Supabase 环境变量未配置。");
+          return;
+        }
 
-      if (isMounted) {
-        setTransactions(result.transactions);
-        setIsCloudEnabled(result.mode === "supabase");
-        setStorageStatus(result.mode === "supabase" ? "cloud" : isSupabaseConfigured() ? "fallback" : "local");
-        setPendingLegacyCount(result.mode === "supabase" ? getPendingLegacyTransactions(result.transactions).length : 0);
-        setError(result.message ?? "");
-        setIsLoadingTransactions(false);
+        const urlSession = await readSessionFromUrl();
+        const storedSession = urlSession ?? readStoredSession();
+        const activeSession = await refreshSessionIfNeeded(storedSession);
+
+        if (!activeSession) {
+          setAuthMessage("メールでログインしてください / 请使用邮箱登录后记账。");
+          return;
+        }
+
+        const result = await readTransactions(activeSession);
+
+        if (isMounted) {
+          setSession(activeSession);
+          setTransactions(result.transactions);
+          setIsCloudEnabled(result.mode === "supabase");
+          setStorageStatus(result.mode === "supabase" ? "cloud" : isSupabaseConfigured() ? "fallback" : "local");
+          setPendingLegacyCount(result.mode === "supabase" ? getPendingLegacyTransactions(result.transactions).length : 0);
+          setAuthMessage(urlSession ? "ログインしました / 登录成功。" : "");
+          setError(result.message ?? "");
+        }
+      } catch {
+        clearStoredSession();
+        if (isMounted) {
+          setSession(null);
+          setTransactions([]);
+          setAuthMessage("ログイン状態を確認できませんでした / 无法确认登录状态，请重新登录。");
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingTransactions(false);
+        }
       }
     }
 
-    loadTransactions();
+    initialize();
 
     return () => {
       isMounted = false;
@@ -89,6 +131,11 @@ export default function Home() {
   const currentMonth = new Date();
 
   function handleParse() {
+    if (!session) {
+      setError("ログイン後に記録できます / 请登录后再记账。");
+      return;
+    }
+
     const trimmed = input.trim();
 
     if (!trimmed) {
@@ -114,7 +161,35 @@ export default function Home() {
     setDrafts((current) => current.map((item, itemIndex) => (itemIndex === index ? draft : item)));
   }
 
+  async function handleSendLoginEmail(email: string) {
+    try {
+      await sendLoginEmail(email);
+      setAuthMessage("ログインメールを送信しました / 登录邮件已发送，请查看邮箱。");
+      setError("");
+    } catch {
+      setAuthMessage("ログインメールを送信できませんでした / 登录邮件发送失败，请检查 Supabase 设置。");
+    }
+  }
+
+  function handleSignOut() {
+    clearStoredSession();
+    setSession(null);
+    setTransactions([]);
+    setSelectedTransactionId("");
+    setDrafts([]);
+    setPendingLegacyCount(0);
+    setIsCloudEnabled(false);
+    setStorageStatus("local");
+    setAuthMessage("ログアウトしました / 已退出登录。");
+    setError("");
+  }
+
   async function handleSave() {
+    if (!session) {
+      setError("ログイン後に保存できます / 请登录后再保存。");
+      return;
+    }
+
     const nextTransactions = buildTransactionsFromDrafts(drafts, parsedOriginalText || input, parsedImageDataUrls);
 
     if (nextTransactions.length === 0) {
@@ -125,7 +200,7 @@ export default function Home() {
     setIsSaving(true);
 
     try {
-      const result = await addTransactions(nextTransactions, transactions);
+      const result = await addTransactions(nextTransactions, transactions, session);
       setTransactions(result.transactions);
       setIsCloudEnabled(result.mode === "supabase");
       setStorageStatus(result.cloudSynced ? "cloud" : isSupabaseConfigured() ? "fallback" : "local");
@@ -145,8 +220,8 @@ export default function Home() {
   }
 
   async function handleMigrateLegacyTransactions() {
-    if (!isSupabaseConfigured()) {
-      setError("已保存到本地，云同步未启用。");
+    if (!session || !isSupabaseConfigured()) {
+      setError("ログイン後に移行できます / 请登录后再迁移。");
       return;
     }
 
@@ -154,7 +229,7 @@ export default function Home() {
     setMigrationResult(undefined);
 
     try {
-      const result = await migrateLegacyTransactions(transactions);
+      const result = await migrateLegacyTransactions(transactions, session);
       setTransactions(result.transactions);
       setIsCloudEnabled(true);
       setStorageStatus("cloud");
@@ -200,6 +275,11 @@ export default function Home() {
   }
 
   function handleExportBackup() {
+    if (!session) {
+      setError("ログイン後に書き出せます / 请登录后再导出。");
+      return;
+    }
+
     if (transactions.length === 0) {
       setError("書き出す記録がありません / 当前没有可导出的记录。");
       return;
@@ -220,6 +300,11 @@ export default function Home() {
   }
 
   async function handleImportBackup(file: File) {
+    if (!session) {
+      setError("ログイン後に読み込めます / 请登录后再导入。");
+      return;
+    }
+
     try {
       const fileText = await file.text();
       const preview = parseBackupTransactions(fileText, transactions);
@@ -233,7 +318,7 @@ export default function Home() {
         return;
       }
 
-      const result = await addTransactions(preview.transactions, transactions);
+      const result = await addTransactions(preview.transactions, transactions, session);
       setTransactions(result.transactions);
       setIsCloudEnabled(result.mode === "supabase");
       setStorageStatus(result.cloudSynced ? "cloud" : isSupabaseConfigured() ? "fallback" : "local");
@@ -248,14 +333,40 @@ export default function Home() {
     }
   }
 
+  async function handleUpdateTransaction(transaction: Transaction) {
+    if (!session) {
+      setError("ログイン後に編集できます / 请登录后再编辑。");
+      return;
+    }
+
+    setIsUpdating(true);
+
+    try {
+      const result = await updateTransaction(transaction, transactions, session);
+      setTransactions(result.transactions);
+      setIsCloudEnabled(result.mode === "supabase");
+      setStorageStatus(result.cloudSynced ? "cloud" : isSupabaseConfigured() ? "fallback" : "local");
+      setError(result.message ?? "");
+    } catch {
+      setError("更新に失敗しました / 编辑保存失败，请稍后再试。");
+    } finally {
+      setIsUpdating(false);
+    }
+  }
+
   async function handleDelete(id: string) {
+    if (!session) {
+      setError("ログイン後に削除できます / 请登录后再删除。");
+      return;
+    }
+
     const confirmed = window.confirm("この記録を削除しますか？ / 确定删除这条记录吗？");
     if (!confirmed) {
       return;
     }
 
     try {
-      const result = await deleteTransaction(id, transactions);
+      const result = await deleteTransaction(id, transactions, session);
       setTransactions(result.transactions);
       setIsCloudEnabled(result.mode === "supabase");
       setStorageStatus(result.mode === "supabase" ? "cloud" : isSupabaseConfigured() ? "fallback" : "local");
@@ -299,10 +410,32 @@ export default function Home() {
 
           <MonthlySummary summary={summary} />
 
+          <AuthPanel
+            session={session}
+            isConfigured={isAuthConfigured()}
+            isLoading={isLoadingTransactions}
+            message={authMessage}
+            onSendLoginEmail={handleSendLoginEmail}
+            onSignOut={handleSignOut}
+          />
+
+          {!session ? (
+            <section className="panel empty-detail">
+              <h2>
+                <BilingualText ja="ログインが必要です" zh="需要登录" />
+              </h2>
+              <p>
+                <BilingualText ja="メールログイン後、クラウドに記録を保存できます。" zh="邮箱登录后，记录会保存到云端。" />
+              </p>
+            </section>
+          ) : null}
+
+          {session ? (
+            <>
           <DataSafetyPanel
             status={storageStatus}
             recordCount={transactions.length}
-            localStorageKey={getLocalStorageKey()}
+            localStorageKey={getLocalStorageKey(session)}
             importResult={importResult}
             onExport={handleExportBackup}
             onImport={handleImportBackup}
@@ -341,13 +474,20 @@ export default function Home() {
               setError("");
             }}
           />
+            </>
+          ) : null}
 
           {isLoadingTransactions ? (
             <section className="panel empty-detail">
               <p>読み込み中... / 正在读取记账数据...</p>
             </section>
           ) : (
-            <TransactionDetail transaction={selectedTransaction} onDelete={handleDelete} />
+            <TransactionDetail
+              transaction={session ? selectedTransaction : undefined}
+              onDelete={handleDelete}
+              onUpdate={handleUpdateTransaction}
+              isUpdating={isUpdating}
+            />
           )}
         </section>
       </div>

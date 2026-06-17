@@ -401,6 +401,39 @@ select:focus {
   font-size: 14px;
 }
 
+.auth-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.auth-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.auth-header p,
+.auth-message,
+.auth-user {
+  margin-bottom: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.auth-form {
+  display: grid;
+  gap: 10px;
+}
+
+.auth-form label {
+  display: grid;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
 .migration-panel {
   display: grid;
   gap: 12px;
@@ -806,6 +839,30 @@ select:focus {
   border-radius: 8px;
   padding: 0;
   background: var(--surface-soft);
+}
+
+.detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.detail-edit-form {
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--surface-soft);
+}
+
+.detail-edit-form label {
+  display: grid;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .original-text-block {
