@@ -53,6 +53,43 @@ test("parses requested income and expense examples", () => {
   }
 });
 
+test("classifies transfer-to-me phrases as income and preserves direction", () => {
+  const incomeExamples = [
+    "老公给了我12万日元",
+    "老公给我12万日元",
+    "朋友转给我3000日元",
+    "妈妈打给我5000",
+    "同事还给我120000",
+    "夫からもらった12万円",
+    "夫がくれた12万円"
+  ];
+
+  for (const text of incomeExamples) {
+    const [transaction] = parseNaturalLanguage(text);
+    assert.equal(transaction.type, "income", text);
+    assert.equal(transaction.category, "转账收入", text);
+  }
+
+  const [target] = parseNaturalLanguage("老公给了我12万日元");
+  assert.equal(target.amount, 120000);
+});
+
+test("classifies giving or paying others as expense", () => {
+  const expenseExamples = [
+    "给别人3000日元",
+    "给老公5000日元",
+    "付给房东80000日元",
+    "买了猫粮3000日元",
+    "花了12800円",
+    "支付240円"
+  ];
+
+  for (const text of expenseExamples) {
+    const [transaction] = parseNaturalLanguage(text);
+    assert.equal(transaction.type, "expense", text);
+  }
+});
+
 test("parses Chinese, Japanese, and mixed language input", () => {
   const now = new Date(2026, 5, 16);
   const examples = [

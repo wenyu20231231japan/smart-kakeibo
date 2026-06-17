@@ -32,6 +32,7 @@ test("preserves originalText exactly as the user entered it", () => {
 
 test("preserves originalText for requested examples", () => {
   const examples = [
+    "老公给了我12万日元",
     "昨天老公给了我12万",
     "今天发工资20万",
     "收到退款3000",

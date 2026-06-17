@@ -6,11 +6,14 @@ import type { ParsedTransactionDraft, TransactionType } from "../../types/transa
 
 const incomeKeywords = [
   "给了我",
+  "给我",
   "收到",
   "发工资",
   "工资到账",
   "转给我",
   "转账给我",
+  "打给我",
+  "还给我",
   "收款",
   "入账",
   "退款",
@@ -27,18 +30,37 @@ const incomeKeywords = [
   "入金",
   "返金",
   "ボーナス",
-  "振込"
+  "振込",
+  "夫からもらった",
+  "夫がくれた"
 ];
 
-const expenseKeywords = ["买了", "花了", "支付", "付款", "交房租", "购买", "消费", "買った", "使った", "払った", "支払った", "購入", "家賃を払った"];
+const expenseKeywords = [
+  "给别人",
+  "给老公",
+  "付给",
+  "买了",
+  "花了",
+  "支付",
+  "付款",
+  "交房租",
+  "购买",
+  "消费",
+  "買った",
+  "使った",
+  "払った",
+  "支払った",
+  "購入",
+  "家賃を払った"
+];
 
 function inferType(text: string): TransactionType {
-  if (incomeKeywords.some((keyword) => text.includes(keyword))) {
-    return "income";
-  }
-
   if (expenseKeywords.some((keyword) => text.includes(keyword))) {
     return "expense";
+  }
+
+  if (incomeKeywords.some((keyword) => text.includes(keyword))) {
+    return "income";
   }
 
   return "expense";

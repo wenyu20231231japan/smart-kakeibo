@@ -5,6 +5,7 @@ import { BilingualText } from "@/components/BilingualText";
 import { MonthlySummary } from "@/components/MonthlySummary";
 import { NaturalLanguageInput } from "@/components/NaturalLanguageInput";
 import { ParsedRecordEditor } from "@/components/ParsedRecordEditor";
+import { TransactionDetail } from "@/components/TransactionDetail";
 import { TransactionList } from "@/components/TransactionList";
 import { calculateMonthlySummary } from "@/lib/calculations/monthlySummary";
 import { parseNaturalLanguage } from "@/lib/parser/parseNaturalLanguage";
@@ -21,6 +22,7 @@ export default function Home() {
   const [parsedImageDataUrls, setParsedImageDataUrls] = useState<string[]>([]);
   const [isCompressingImage, setIsCompressingImage] = useState(false);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [selectedTransactionId, setSelectedTransactionId] = useState<string>("");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -40,6 +42,10 @@ export default function Home() {
   );
 
   const summary = useMemo(() => calculateMonthlySummary(transactions), [transactions]);
+  const selectedTransaction = useMemo(
+    () => sortedTransactions.find((transaction) => transaction.id === selectedTransactionId) ?? sortedTransactions[0],
+    [selectedTransactionId, sortedTransactions]
+  );
   const currentMonth = new Date();
 
   function handleParse() {
@@ -76,7 +82,9 @@ export default function Home() {
       return;
     }
 
-    setTransactions(addTransactions(nextTransactions));
+    const updatedTransactions = addTransactions(nextTransactions);
+    setTransactions(updatedTransactions);
+    setSelectedTransactionId(nextTransactions[0]?.id ?? selectedTransactionId);
     setInput("");
     setImageDataUrls([]);
     setDrafts([]);
@@ -113,55 +121,70 @@ export default function Home() {
       return;
     }
 
-    setTransactions(deleteTransaction(id));
+    const updatedTransactions = deleteTransaction(id);
+    setTransactions(updatedTransactions);
+    if (selectedTransactionId === id) {
+      setSelectedTransactionId(updatedTransactions[0]?.id ?? "");
+    }
   }
 
   return (
     <main className="app-shell">
-      <header className="app-header">
-        <div>
-          <p className="eyebrow">
-            <BilingualText ja="自然言語の家計簿" zh="自然语言记账" />
-          </p>
-          <h1>
-            <BilingualText ja="スマート家計簿" zh="智能记账" />
-          </h1>
-        </div>
-        <span className="month-label">
-          <BilingualText
-            ja={currentMonth.toLocaleDateString("ja-JP", { year: "numeric", month: "long" })}
-            zh={currentMonth.toLocaleDateString("zh-CN", { year: "numeric", month: "long" })}
+      <div className="app-layout">
+        <TransactionList
+          transactions={sortedTransactions}
+          selectedId={selectedTransaction?.id}
+          onSelect={(transaction) => setSelectedTransactionId(transaction.id)}
+          onDelete={handleDelete}
+        />
+
+        <section className="workspace-panel">
+          <header className="app-header">
+            <div>
+              <p className="eyebrow">
+                <BilingualText ja="自然言語の家計簿" zh="自然语言记账" />
+              </p>
+              <h1>
+                <BilingualText ja="スマート家計簿" zh="智能记账" />
+              </h1>
+            </div>
+            <span className="month-label">
+              <BilingualText
+                ja={currentMonth.toLocaleDateString("ja-JP", { year: "numeric", month: "long" })}
+                zh={currentMonth.toLocaleDateString("zh-CN", { year: "numeric", month: "long" })}
+              />
+            </span>
+          </header>
+
+          <MonthlySummary summary={summary} />
+
+          <NaturalLanguageInput
+            value={input}
+            onChange={setInput}
+            imageDataUrls={imageDataUrls}
+            isCompressingImage={isCompressingImage}
+            onImagesSelected={handleImagesSelected}
+            onRemoveImage={handleRemoveImage}
+            onParse={handleParse}
+            error={error}
           />
-        </span>
-      </header>
 
-      <MonthlySummary summary={summary} />
+          <ParsedRecordEditor
+            drafts={drafts}
+            originalText={parsedOriginalText}
+            onChange={handleDraftChange}
+            onSave={handleSave}
+            onCancel={() => {
+              setDrafts([]);
+              setParsedOriginalText("");
+              setParsedImageDataUrls([]);
+              setError("");
+            }}
+          />
 
-      <NaturalLanguageInput
-        value={input}
-        onChange={setInput}
-        imageDataUrls={imageDataUrls}
-        isCompressingImage={isCompressingImage}
-        onImagesSelected={handleImagesSelected}
-        onRemoveImage={handleRemoveImage}
-        onParse={handleParse}
-        error={error}
-      />
-
-      <ParsedRecordEditor
-        drafts={drafts}
-        originalText={parsedOriginalText}
-        onChange={handleDraftChange}
-        onSave={handleSave}
-        onCancel={() => {
-          setDrafts([]);
-          setParsedOriginalText("");
-          setParsedImageDataUrls([]);
-          setError("");
-        }}
-      />
-
-      <TransactionList transactions={sortedTransactions} onDelete={handleDelete} />
+          <TransactionDetail transaction={selectedTransaction} onDelete={handleDelete} />
+        </section>
+      </div>
     </main>
   );
 }

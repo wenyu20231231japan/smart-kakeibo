@@ -69,10 +69,118 @@ button {
 }
 
 .app-shell {
-  width: min(100%, 760px);
+  width: min(100%, 1280px);
   min-height: 100vh;
   margin: 0 auto;
   padding: 20px 16px 40px;
+}
+
+.app-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.workspace-panel {
+  order: 1;
+}
+
+.records-sidebar {
+  order: 2;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 64px;
+  border-bottom: 1px solid var(--line);
+  padding: 14px;
+}
+
+.sidebar-header h2 {
+  margin-bottom: 2px;
+}
+
+.sidebar-header p {
+  margin-bottom: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.sidebar-record-list {
+  display: grid;
+  gap: 10px;
+  max-height: 58vh;
+  overflow-y: auto;
+  padding: 12px;
+}
+
+.sidebar-record {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.sidebar-record.active {
+  border-color: var(--primary);
+  background: var(--surface-soft);
+}
+
+.sidebar-record-main {
+  display: grid;
+  gap: 5px;
+  width: 100%;
+  padding: 12px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.sidebar-record-main strong {
+  display: block;
+  font-size: 14px;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.sidebar-record-date,
+.sidebar-record-category {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.sidebar-amount {
+  justify-self: start;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.sidebar-delete {
+  width: 100%;
+  min-height: 34px;
+  border-top: 1px solid var(--line);
+  background: #fff2f0;
+  color: var(--expense);
+  font-weight: 700;
+}
+
+.sidebar-delete .bilingual-ja {
+  font-size: 12px;
+}
+
+.sidebar-delete .bilingual-zh {
+  font-size: 10px;
+}
+
+.sidebar-empty {
+  margin: 12px;
 }
 
 .app-header {
@@ -718,5 +826,34 @@ select:focus {
   .delete-button {
     width: auto;
     padding: 0 16px;
+  }
+}
+
+@media (min-width: 920px) {
+  .app-shell {
+    padding: 24px;
+  }
+
+  .app-layout {
+    display: grid;
+    grid-template-columns: minmax(280px, 30%) minmax(0, 70%);
+    align-items: start;
+    gap: 20px;
+  }
+
+  .records-sidebar {
+    position: sticky;
+    top: 24px;
+    order: initial;
+    height: calc(100vh - 48px);
+  }
+
+  .workspace-panel {
+    order: initial;
+    min-width: 0;
+  }
+
+  .sidebar-record-list {
+    max-height: calc(100vh - 113px);
   }
 }
