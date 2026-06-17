@@ -401,6 +401,33 @@ select:focus {
   font-size: 14px;
 }
 
+.migration-panel {
+  display: grid;
+  gap: 12px;
+  background: var(--surface-soft);
+}
+
+.migration-panel h2 {
+  margin-bottom: 6px;
+}
+
+.migration-panel p {
+  margin-bottom: 0;
+  color: var(--muted);
+}
+
+.migration-result {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.migration-result span {
+  display: block;
+  margin-bottom: 4px;
+}
+
 .image-upload-row {
   display: flex;
   align-items: center;

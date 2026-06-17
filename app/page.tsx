@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { BilingualText } from "@/components/BilingualText";
+import { LegacyMigrationPanel } from "@/components/LegacyMigrationPanel";
 import { MonthlySummary } from "@/components/MonthlySummary";
 import { NaturalLanguageInput } from "@/components/NaturalLanguageInput";
 import { ParsedRecordEditor } from "@/components/ParsedRecordEditor";
@@ -9,7 +10,14 @@ import { TransactionDetail } from "@/components/TransactionDetail";
 import { TransactionList } from "@/components/TransactionList";
 import { calculateMonthlySummary } from "@/lib/calculations/monthlySummary";
 import { parseNaturalLanguage } from "@/lib/parser/parseNaturalLanguage";
-import { addTransactions, deleteTransaction, readTransactions } from "@/lib/storage/transactionStorage";
+import {
+  addTransactions,
+  deleteTransaction,
+  getPendingLegacyTransactions,
+  migrateLegacyTransactions,
+  readTransactions,
+  type MigrationResult
+} from "@/lib/storage/transactionStorage";
 import { buildTransactionsFromDrafts } from "@/lib/transactions/buildTransactions";
 import { compressImage } from "@/lib/images/compressImage";
 import type { ParsedTransactionDraft, Transaction } from "@/types/transaction";
@@ -23,10 +31,41 @@ export default function Home() {
   const [isCompressingImage, setIsCompressingImage] = useState(false);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [selectedTransactionId, setSelectedTransactionId] = useState<string>("");
+  const [isLoadingTransactions, setIsLoadingTransactions] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [pendingLegacyCount, setPendingLegacyCount] = useState(0);
+  const [isMigrating, setIsMigrating] = useState(false);
+  const [migrationResult, setMigrationResult] = useState<Omit<MigrationResult, "transactions"> | undefined>();
   const [error, setError] = useState("");
 
   useEffect(() => {
-    setTransactions(readTransactions());
+    let isMounted = true;
+
+    async function loadTransactions() {
+      try {
+        const savedTransactions = await readTransactions();
+
+        if (isMounted) {
+          setTransactions(savedTransactions);
+          setPendingLegacyCount(getPendingLegacyTransactions(savedTransactions).length);
+          setError("");
+        }
+      } catch {
+        if (isMounted) {
+          setError("Supabase設定を確認してください / 请检查 Supabase 环境变量和数据表设置。");
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingTransactions(false);
+        }
+      }
+    }
+
+    loadTransactions();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const sortedTransactions = useMemo(
@@ -74,7 +113,7 @@ export default function Home() {
     setDrafts((current) => current.map((item, itemIndex) => (itemIndex === index ? draft : item)));
   }
 
-  function handleSave() {
+  async function handleSave() {
     const nextTransactions = buildTransactionsFromDrafts(drafts, parsedOriginalText || input, parsedImageDataUrls);
 
     if (nextTransactions.length === 0) {
@@ -82,15 +121,49 @@ export default function Home() {
       return;
     }
 
-    const updatedTransactions = addTransactions(nextTransactions);
-    setTransactions(updatedTransactions);
-    setSelectedTransactionId(nextTransactions[0]?.id ?? selectedTransactionId);
-    setInput("");
-    setImageDataUrls([]);
-    setDrafts([]);
-    setParsedOriginalText("");
-    setParsedImageDataUrls([]);
-    setError("");
+    setIsSaving(true);
+
+    try {
+      const updatedTransactions = await addTransactions(nextTransactions);
+      setTransactions(updatedTransactions);
+      setSelectedTransactionId(nextTransactions[0]?.id ?? selectedTransactionId);
+      setInput("");
+      setImageDataUrls([]);
+      setDrafts([]);
+      setParsedOriginalText("");
+      setParsedImageDataUrls([]);
+      setError("");
+    } catch {
+      setError("保存に失敗しました / 保存失败，请检查 Supabase 设置。");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function handleMigrateLegacyTransactions() {
+    setIsMigrating(true);
+    setMigrationResult(undefined);
+
+    try {
+      const result = await migrateLegacyTransactions(transactions);
+      setTransactions(result.transactions);
+      setPendingLegacyCount(getPendingLegacyTransactions(result.transactions).length);
+      setMigrationResult({
+        successCount: result.successCount,
+        failedCount: result.failedCount,
+        skippedCount: result.skippedCount
+      });
+      setError("");
+    } catch {
+      setMigrationResult({
+        successCount: 0,
+        failedCount: pendingLegacyCount,
+        skippedCount: 0
+      });
+      setError("移行に失敗しました / 迁移失败，请检查 Supabase 设置。");
+    } finally {
+      setIsMigrating(false);
+    }
   }
 
   async function handleImagesSelected(files: FileList | null) {
@@ -115,16 +188,21 @@ export default function Home() {
     setImageDataUrls((current) => current.filter((_, itemIndex) => itemIndex !== index));
   }
 
-  function handleDelete(id: string) {
+  async function handleDelete(id: string) {
     const confirmed = window.confirm("この記録を削除しますか？ / 确定删除这条记录吗？");
     if (!confirmed) {
       return;
     }
 
-    const updatedTransactions = deleteTransaction(id);
-    setTransactions(updatedTransactions);
-    if (selectedTransactionId === id) {
-      setSelectedTransactionId(updatedTransactions[0]?.id ?? "");
+    try {
+      const updatedTransactions = await deleteTransaction(id);
+      setTransactions(updatedTransactions);
+      if (selectedTransactionId === id) {
+        setSelectedTransactionId(updatedTransactions[0]?.id ?? "");
+      }
+      setError("");
+    } catch {
+      setError("削除に失敗しました / 删除失败，请检查 Supabase 设置。");
     }
   }
 
@@ -158,6 +236,13 @@ export default function Home() {
 
           <MonthlySummary summary={summary} />
 
+          <LegacyMigrationPanel
+            pendingCount={pendingLegacyCount}
+            isMigrating={isMigrating}
+            result={migrationResult}
+            onMigrate={handleMigrateLegacyTransactions}
+          />
+
           <NaturalLanguageInput
             value={input}
             onChange={setInput}
@@ -172,6 +257,7 @@ export default function Home() {
           <ParsedRecordEditor
             drafts={drafts}
             originalText={parsedOriginalText}
+            isSaving={isSaving}
             onChange={handleDraftChange}
             onSave={handleSave}
             onCancel={() => {
@@ -182,7 +268,13 @@ export default function Home() {
             }}
           />
 
-          <TransactionDetail transaction={selectedTransaction} onDelete={handleDelete} />
+          {isLoadingTransactions ? (
+            <section className="panel empty-detail">
+              <p>読み込み中... / 正在读取 Supabase 数据...</p>
+            </section>
+          ) : (
+            <TransactionDetail transaction={selectedTransaction} onDelete={handleDelete} />
+          )}
         </section>
       </div>
     </main>

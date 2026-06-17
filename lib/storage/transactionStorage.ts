@@ -1,33 +1,235 @@
-import type { Transaction } from "@/types/transaction";
+import type { Category, Currency, Transaction, TransactionType } from "@/types/transaction";
 
-const STORAGE_KEY = "smart-accounting-transactions";
+type TransactionRow = {
+  id: string;
+  type: TransactionType;
+  amount: number;
+  currency: Currency;
+  category: Category;
+  date: string;
+  merchant: string | null;
+  note: string | null;
+  original_text: string;
+  image_data_urls: string[] | null;
+  created_at: string;
+  updated_at: string;
+};
 
-export function readTransactions(): Transaction[] {
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const TABLE_NAME = "transactions";
+const LEGACY_STORAGE_KEY = "smart-accounting-transactions";
+const MIGRATED_STORAGE_KEY = "smart-accounting-transactions-migrated-ids";
+
+export type MigrationResult = {
+  successCount: number;
+  failedCount: number;
+  skippedCount: number;
+  transactions: Transaction[];
+};
+
+function getSupabaseConfig() {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    throw new Error("Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.");
+  }
+
+  return {
+    url: SUPABASE_URL.replace(/\/$/, ""),
+    key: SUPABASE_ANON_KEY
+  };
+}
+
+function getHeaders() {
+  const { key } = getSupabaseConfig();
+
+  return {
+    apikey: key,
+    Authorization: `Bearer ${key}`,
+    "Content-Type": "application/json"
+  };
+}
+
+function toTransaction(row: TransactionRow): Transaction {
+  return {
+    id: row.id,
+    type: row.type,
+    amount: Number(row.amount),
+    currency: row.currency,
+    category: row.category,
+    date: row.date,
+    merchant: row.merchant ?? "",
+    note: row.note ?? "",
+    originalText: row.original_text,
+    imageDataUrls: row.image_data_urls ?? [],
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
+function toRow(transaction: Transaction): TransactionRow {
+  return {
+    id: transaction.id,
+    type: transaction.type,
+    amount: transaction.amount,
+    currency: transaction.currency,
+    category: transaction.category,
+    date: transaction.date,
+    merchant: transaction.merchant || null,
+    note: transaction.note || null,
+    original_text: transaction.originalText,
+    image_data_urls: transaction.imageDataUrls,
+    created_at: transaction.createdAt,
+    updated_at: transaction.updatedAt
+  };
+}
+
+function normalizeLegacyTransaction(transaction: Transaction): Transaction {
+  return {
+    ...transaction,
+    merchant: transaction.merchant ?? "",
+    note: transaction.note ?? "",
+    imageDataUrls: transaction.imageDataUrls ?? []
+  };
+}
+
+async function parseResponse<T>(response: Response): Promise<T> {
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || `Supabase request failed with status ${response.status}`);
+  }
+
+  return response.json() as Promise<T>;
+}
+
+export async function readTransactions(): Promise<Transaction[]> {
+  const { url } = getSupabaseConfig();
+  const response = await fetch(`${url}/rest/v1/${TABLE_NAME}?select=*&order=date.desc,created_at.desc`, {
+    headers: getHeaders()
+  });
+  const rows = await parseResponse<TransactionRow[]>(response);
+
+  return rows.map(toTransaction);
+}
+
+export async function addTransactions(nextTransactions: Transaction[]): Promise<Transaction[]> {
+  const { url } = getSupabaseConfig();
+  const response = await fetch(`${url}/rest/v1/${TABLE_NAME}`, {
+    method: "POST",
+    headers: {
+      ...getHeaders(),
+      Prefer: "return=representation"
+    },
+    body: JSON.stringify(nextTransactions.map(toRow))
+  });
+  await parseResponse<TransactionRow[]>(response);
+
+  return readTransactions();
+}
+
+export function readLegacyTransactions(): Transaction[] {
   if (typeof window === "undefined") {
     return [];
   }
 
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as Transaction[]) : [];
+    const raw = window.localStorage.getItem(LEGACY_STORAGE_KEY);
+    const parsed = raw ? (JSON.parse(raw) as Transaction[]) : [];
+
+    return parsed.map(normalizeLegacyTransaction);
   } catch {
     return [];
   }
 }
 
-export function writeTransactions(transactions: Transaction[]) {
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(transactions));
+export function readMigratedLegacyIds(): string[] {
+  if (typeof window === "undefined") {
+    return [];
+  }
+
+  try {
+    const raw = window.localStorage.getItem(MIGRATED_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as string[]) : [];
+  } catch {
+    return [];
+  }
 }
 
-export function addTransactions(nextTransactions: Transaction[]) {
-  const current = readTransactions();
-  const merged = [...nextTransactions, ...current];
-  writeTransactions(merged);
-  return merged;
+export function markLegacyTransactionsMigrated(ids: string[]) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const mergedIds = [...new Set([...readMigratedLegacyIds(), ...ids])];
+  window.localStorage.setItem(MIGRATED_STORAGE_KEY, JSON.stringify(mergedIds));
 }
 
-export function deleteTransaction(id: string) {
-  const next = readTransactions().filter((transaction) => transaction.id !== id);
-  writeTransactions(next);
-  return next;
+export function getPendingLegacyTransactions(existingTransactions: Transaction[] = []) {
+  const migratedIds = new Set(readMigratedLegacyIds());
+  const existingIds = new Set(existingTransactions.map((transaction) => transaction.id));
+
+  return readLegacyTransactions().filter(
+    (transaction) => !migratedIds.has(transaction.id) && !existingIds.has(transaction.id)
+  );
+}
+
+export async function migrateLegacyTransactions(existingTransactions: Transaction[] = []): Promise<MigrationResult> {
+  const pendingTransactions = getPendingLegacyTransactions(existingTransactions);
+
+  if (pendingTransactions.length === 0) {
+    return {
+      successCount: 0,
+      failedCount: 0,
+      skippedCount: readLegacyTransactions().length,
+      transactions: existingTransactions
+    };
+  }
+
+  const { url } = getSupabaseConfig();
+  const response = await fetch(`${url}/rest/v1/${TABLE_NAME}?on_conflict=id`, {
+    method: "POST",
+    headers: {
+      ...getHeaders(),
+      Prefer: "resolution=ignore-duplicates,return=representation"
+    },
+    body: JSON.stringify(pendingTransactions.map(toRow))
+  });
+
+  if (!response.ok) {
+    return {
+      successCount: 0,
+      failedCount: pendingTransactions.length,
+      skippedCount: readLegacyTransactions().length - pendingTransactions.length,
+      transactions: existingTransactions
+    };
+  }
+
+  const insertedRows = await parseResponse<TransactionRow[]>(response);
+  const insertedIds = insertedRows.map((row) => row.id);
+  const duplicateIds = pendingTransactions
+    .map((transaction) => transaction.id)
+    .filter((id) => !insertedIds.includes(id));
+
+  markLegacyTransactionsMigrated([...insertedIds, ...duplicateIds]);
+
+  return {
+    successCount: insertedIds.length,
+    failedCount: 0,
+    skippedCount: readLegacyTransactions().length - insertedIds.length,
+    transactions: await readTransactions()
+  };
+}
+
+export async function deleteTransaction(id: string): Promise<Transaction[]> {
+  const { url } = getSupabaseConfig();
+  const response = await fetch(`${url}/rest/v1/${TABLE_NAME}?id=eq.${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    headers: getHeaders()
+  });
+
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || `Supabase delete failed with status ${response.status}`);
+  }
+
+  return readTransactions();
 }

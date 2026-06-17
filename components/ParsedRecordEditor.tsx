@@ -10,12 +10,13 @@ import type { ParsedTransactionDraft, TransactionType } from "@/types/transactio
 type Props = {
   drafts: ParsedTransactionDraft[];
   originalText: string;
+  isSaving?: boolean;
   onChange: (index: number, draft: ParsedTransactionDraft) => void;
   onSave: () => void;
   onCancel: () => void;
 };
 
-export function ParsedRecordEditor({ drafts, originalText, onChange, onSave, onCancel }: Props) {
+export function ParsedRecordEditor({ drafts, originalText, isSaving = false, onChange, onSave, onCancel }: Props) {
   if (drafts.length === 0) {
     return null;
   }
@@ -168,8 +169,8 @@ export function ParsedRecordEditor({ drafts, originalText, onChange, onSave, onC
         ))}
       </div>
 
-      <button className="primary-button" type="button" onClick={onSave}>
-        <BilingualText ja="確認して保存" zh="确认保存" />
+      <button className="primary-button" type="button" onClick={onSave} disabled={isSaving}>
+        {isSaving ? <BilingualText ja="保存中..." zh="保存中..." /> : <BilingualText ja="確認して保存" zh="确认保存" />}
       </button>
     </section>
   );
