@@ -67,7 +67,7 @@ function inferType(text: string): TransactionType {
 }
 
 function getSegmentForAmount(text: string, amountIndex: number, nextAmountIndex?: number) {
-  const separators = ["。", "，", ",", "、", "；", ";", "然后", "之后", "再", "另外"];
+  const separators = ["\n", "；", ";", "。", "然后", "之后", "另外", "还有", "再加", "そして"];
   let start = 0;
   let end = nextAmountIndex ?? text.length;
 

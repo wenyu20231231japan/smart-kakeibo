@@ -25,6 +25,11 @@ test("parses ordinary amount expressions", () => {
   assert.deepEqual(parseAmounts("咖啡580円").map((item) => item.amount), [580]);
 });
 
+test("does not parse date numbers as amounts", () => {
+  assert.deepEqual(parseAmounts("6/17，自动販売機でジュースを一本、170円").map((item) => item.amount), [170]);
+  assert.deepEqual(parseAmounts("6月17日、コンビニでお茶120円").map((item) => item.amount), [120]);
+});
+
 test("parses multiple amount expressions in one sentence", () => {
   const amounts = parseAmounts("坐地铁去难波240日元，然后买咖啡580円，再买材料1.5万日元");
   assert.deepEqual(

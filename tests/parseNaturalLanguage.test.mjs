@@ -198,3 +198,28 @@ test("parses relative and explicit dates clearly", () => {
     assert.equal(transaction.date, example.date, example.text);
   }
 });
+
+test("does not split comma-separated date and amount fragments", () => {
+  const now = new Date(2026, 5, 19);
+  const vendingMachine = parseNaturalLanguage("6/17，自动販売機でジュースを一本、170円", now);
+  assert.equal(vendingMachine.length, 1);
+  assert.equal(vendingMachine[0].type, "expense");
+  assert.equal(vendingMachine[0].amount, 170);
+  assert.equal(vendingMachine[0].currency, "JPY");
+  assert.equal(vendingMachine[0].merchant, "自动販売機");
+  assert.equal(vendingMachine[0].category, "食费");
+  assert.equal(vendingMachine[0].date, "2026-06-17");
+
+  const tea = parseNaturalLanguage("6月17日、コンビニでお茶120円", now);
+  assert.equal(tea.length, 1);
+  assert.equal(tea[0].amount, 120);
+  assert.equal(tea[0].merchant, "コンビニ");
+  assert.equal(tea[0].category, "食费");
+  assert.equal(tea[0].date, "2026-06-17");
+
+  const coffee = parseNaturalLanguage("今天买咖啡，350日元", now);
+  assert.equal(coffee.length, 1);
+  assert.equal(coffee[0].amount, 350);
+  assert.equal(coffee[0].category, "食费");
+  assert.equal(coffee[0].date, "2026-06-19");
+});

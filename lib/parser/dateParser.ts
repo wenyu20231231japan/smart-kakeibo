@@ -28,5 +28,10 @@ export function parseDate(text: string, now = new Date()) {
     return toDateInputValue(new Date(today.getFullYear(), Number(monthDay[1]) - 1, Number(monthDay[2])));
   }
 
+  const slashMonthDay = text.match(/(?:^|[^\d])(\d{1,2})[/.](\d{1,2})(?:[^\d]|$)/);
+  if (slashMonthDay) {
+    return toDateInputValue(new Date(today.getFullYear(), Number(slashMonthDay[1]) - 1, Number(slashMonthDay[2])));
+  }
+
   return toDateInputValue(today);
 }
