@@ -5,6 +5,7 @@ import { BilingualText } from "@/components/BilingualText";
 type Props = {
   pendingCount: number;
   isMigrating: boolean;
+  compact?: boolean;
   result?: {
     successCount: number;
     failedCount: number;
@@ -13,17 +14,19 @@ type Props = {
   onMigrate: () => void;
 };
 
-export function LegacyMigrationPanel({ pendingCount, isMigrating, result, onMigrate }: Props) {
+export function LegacyMigrationPanel({ pendingCount, isMigrating, compact = false, result, onMigrate }: Props) {
   if (pendingCount === 0 && !result) {
     return null;
   }
 
   return (
-    <section className="panel migration-panel">
+    <section className={compact ? "migration-panel compact" : "panel migration-panel"}>
       <div>
-        <h2>
-          <BilingualText ja="ローカル記録をクラウドへ移行" zh="迁移本地记录到云端" />
-        </h2>
+        {!compact ? (
+          <h2>
+            <BilingualText ja="ローカル記録をクラウドへ移行" zh="迁移本地记录到云端" />
+          </h2>
+        ) : null}
         <p>
           {pendingCount > 0 ? (
             <BilingualText

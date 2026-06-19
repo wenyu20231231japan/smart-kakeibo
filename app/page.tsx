@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { AccountMenu } from "@/components/AccountMenu";
 import { AuthPanel } from "@/components/AuthPanel";
 import { BilingualText } from "@/components/BilingualText";
 import { DataSafetyPanel, type StorageStatus } from "@/components/DataSafetyPanel";
@@ -53,7 +54,6 @@ export default function Home() {
   const [pendingLegacyCount, setPendingLegacyCount] = useState(0);
   const [isMigrating, setIsMigrating] = useState(false);
   const [migrationResult, setMigrationResult] = useState<Omit<MigrationResult, "transactions"> | undefined>();
-  const [isCloudEnabled, setIsCloudEnabled] = useState(false);
   const [storageStatus, setStorageStatus] = useState<StorageStatus>("local");
   const [importResult, setImportResult] = useState<{ importedCount: number; skippedCount: number } | undefined>();
   const [session, setSession] = useState<AuthSession | null>(null);
@@ -84,7 +84,6 @@ export default function Home() {
         if (isMounted) {
           setSession(activeSession);
           setTransactions(result.transactions);
-          setIsCloudEnabled(result.mode === "supabase");
           setStorageStatus(result.mode === "supabase" ? "cloud" : isSupabaseConfigured() ? "fallback" : "local");
           setPendingLegacyCount(result.mode === "supabase" ? getPendingLegacyTransactions(result.transactions).length : 0);
           setAuthMessage(urlSession ? "ログインしました / 登录成功。" : "");
@@ -178,7 +177,6 @@ export default function Home() {
     setSelectedTransactionId("");
     setDrafts([]);
     setPendingLegacyCount(0);
-    setIsCloudEnabled(false);
     setStorageStatus("local");
     setAuthMessage("ログアウトしました / 已退出登录。");
     setError("");
@@ -202,7 +200,6 @@ export default function Home() {
     try {
       const result = await addTransactions(nextTransactions, transactions, session);
       setTransactions(result.transactions);
-      setIsCloudEnabled(result.mode === "supabase");
       setStorageStatus(result.cloudSynced ? "cloud" : isSupabaseConfigured() ? "fallback" : "local");
       setPendingLegacyCount(result.mode === "supabase" ? getPendingLegacyTransactions(result.transactions).length : 0);
       setSelectedTransactionId(nextTransactions[0]?.id ?? selectedTransactionId);
@@ -231,7 +228,6 @@ export default function Home() {
     try {
       const result = await migrateLegacyTransactions(transactions, session);
       setTransactions(result.transactions);
-      setIsCloudEnabled(true);
       setStorageStatus("cloud");
       setPendingLegacyCount(getPendingLegacyTransactions(result.transactions).length);
       setMigrationResult({
@@ -320,7 +316,6 @@ export default function Home() {
 
       const result = await addTransactions(preview.transactions, transactions, session);
       setTransactions(result.transactions);
-      setIsCloudEnabled(result.mode === "supabase");
       setStorageStatus(result.cloudSynced ? "cloud" : isSupabaseConfigured() ? "fallback" : "local");
       setPendingLegacyCount(result.mode === "supabase" ? getPendingLegacyTransactions(result.transactions).length : 0);
       setImportResult({
@@ -344,7 +339,6 @@ export default function Home() {
     try {
       const result = await updateTransaction(transaction, transactions, session);
       setTransactions(result.transactions);
-      setIsCloudEnabled(result.mode === "supabase");
       setStorageStatus(result.cloudSynced ? "cloud" : isSupabaseConfigured() ? "fallback" : "local");
       setError(result.message ?? "");
     } catch {
@@ -368,7 +362,6 @@ export default function Home() {
     try {
       const result = await deleteTransaction(id, transactions, session);
       setTransactions(result.transactions);
-      setIsCloudEnabled(result.mode === "supabase");
       setStorageStatus(result.mode === "supabase" ? "cloud" : isSupabaseConfigured() ? "fallback" : "local");
       setPendingLegacyCount(result.mode === "supabase" ? getPendingLegacyTransactions(result.transactions).length : 0);
       if (selectedTransactionId === id) {
@@ -400,27 +393,21 @@ export default function Home() {
                 <BilingualText ja="スマート家計簿" zh="智能记账" />
               </h1>
             </div>
-            <span className="month-label">
-              <BilingualText
-                ja={currentMonth.toLocaleDateString("ja-JP", { year: "numeric", month: "long" })}
-                zh={currentMonth.toLocaleDateString("zh-CN", { year: "numeric", month: "long" })}
-              />
-            </span>
+            <div className="header-actions">
+              <span className="month-label">
+                <BilingualText
+                  ja={currentMonth.toLocaleDateString("ja-JP", { year: "numeric", month: "long" })}
+                  zh={currentMonth.toLocaleDateString("zh-CN", { year: "numeric", month: "long" })}
+                />
+              </span>
+              <AccountMenu session={session} isSynced={storageStatus === "cloud"} onSignOut={handleSignOut} />
+            </div>
           </header>
 
           <MonthlySummary summary={summary} />
 
-          <AuthPanel
-            session={session}
-            isConfigured={isAuthConfigured()}
-            isLoading={isLoadingTransactions}
-            message={authMessage}
-            onSendLoginEmail={handleSendLoginEmail}
-            onSignOut={handleSignOut}
-          />
-
           {!session ? (
-            <section className="panel empty-detail">
+            <section className="panel login-needed-panel">
               <h2>
                 <BilingualText ja="ログインが必要です" zh="需要登录" />
               </h2>
@@ -432,15 +419,6 @@ export default function Home() {
 
           {session ? (
             <>
-              {isCloudEnabled ? (
-                <LegacyMigrationPanel
-                  pendingCount={pendingLegacyCount}
-                  isMigrating={isMigrating}
-                  result={migrationResult}
-                  onMigrate={handleMigrateLegacyTransactions}
-                />
-              ) : null}
-
               <NaturalLanguageInput
                 value={input}
                 onChange={setInput}
@@ -487,10 +465,32 @@ export default function Home() {
                 <summary>
                   <BilingualText ja="設定" zh="设置" />
                 </summary>
+                <details className="settings-account">
+                  <summary>
+                    <BilingualText ja="アカウント" zh="账号" />
+                  </summary>
+                  <AuthPanel
+                    session={session}
+                    isConfigured={isAuthConfigured()}
+                    isLoading={isLoadingTransactions}
+                    message={authMessage}
+                    onSendLoginEmail={handleSendLoginEmail}
+                    onSignOut={handleSignOut}
+                  />
+                </details>
                 <details className="settings-data-management">
                   <summary>
                     <BilingualText ja="データ管理" zh="数据管理" />
                   </summary>
+                  {pendingLegacyCount > 0 ? (
+                    <LegacyMigrationPanel
+                      compact
+                      pendingCount={pendingLegacyCount}
+                      isMigrating={isMigrating}
+                      result={migrationResult}
+                      onMigrate={handleMigrateLegacyTransactions}
+                    />
+                  ) : null}
                   <DataSafetyPanel
                     compact
                     status={storageStatus}
@@ -499,6 +499,28 @@ export default function Home() {
                     importResult={importResult}
                     onExport={handleExportBackup}
                     onImport={handleImportBackup}
+                  />
+                </details>
+              </details>
+            </section>
+          ) : null}
+          {!session ? (
+            <section className="footer-settings">
+              <details>
+                <summary>
+                  <BilingualText ja="設定" zh="设置" />
+                </summary>
+                <details className="settings-account" open>
+                  <summary>
+                    <BilingualText ja="アカウント" zh="账号" />
+                  </summary>
+                  <AuthPanel
+                    session={session}
+                    isConfigured={isAuthConfigured()}
+                    isLoading={isLoadingTransactions}
+                    message={authMessage}
+                    onSendLoginEmail={handleSendLoginEmail}
+                    onSignOut={handleSignOut}
                   />
                 </details>
               </details>

@@ -191,6 +191,14 @@ button {
   padding: 10px 2px 18px;
 }
 
+.header-actions {
+  position: relative;
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
 .eyebrow {
   margin: 0 0 6px;
   color: var(--primary);
@@ -242,6 +250,68 @@ h3 {
   color: var(--muted);
   font-size: 14px;
   white-space: nowrap;
+}
+
+.account-menu {
+  position: relative;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.account-menu summary {
+  min-height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 7px 10px;
+  background: rgba(255, 255, 255, 0.76);
+  color: var(--primary);
+  cursor: pointer;
+  list-style: none;
+  font-weight: 800;
+}
+
+.account-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.account-menu-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 5;
+  display: grid;
+  gap: 8px;
+  min-width: 220px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.account-menu-popover p {
+  margin-bottom: 0;
+  color: var(--text);
+  font-size: 13px;
+  word-break: break-all;
+}
+
+.account-menu-popover button {
+  justify-self: start;
+  background: transparent;
+  color: var(--expense);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.account-menu.signed-out {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 7px 10px;
+  background: rgba(255, 255, 255, 0.76);
 }
 
 .summary-grid {
@@ -434,10 +504,36 @@ select:focus {
   font-weight: 700;
 }
 
+.login-needed-panel {
+  margin-bottom: 12px;
+}
+
+.login-needed-panel h2 {
+  font-size: 18px;
+}
+
+.login-needed-panel p {
+  margin-bottom: 0;
+  color: var(--muted);
+}
+
 .migration-panel {
   display: grid;
   gap: 12px;
   background: var(--surface-soft);
+}
+
+.migration-panel.compact {
+  margin-top: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+  background: var(--surface-soft);
+}
+
+.migration-panel.compact .primary-button {
+  min-height: 38px;
+  margin-top: 0;
 }
 
 .migration-panel h2 {
@@ -571,11 +667,16 @@ select:focus {
   background: rgba(255, 255, 255, 0.62);
 }
 
+.footer-settings .auth-panel {
+  margin-top: 10px;
+}
+
 .footer-settings summary {
   cursor: pointer;
 }
 
-.settings-data-management > summary {
+.settings-data-management > summary,
+.settings-account > summary {
   font-size: 13px;
 }
 

@@ -23,7 +23,7 @@ export function TransactionList({ transactions, selectedId, onSelect, onDelete }
       <div className="sidebar-header">
         <div>
           <h2>
-            <BilingualText ja="記録一覧" zh="记录列表" />
+            <BilingualText ja="最近の記録" zh="最近记录" />
           </h2>
           <p>{transactions.length}件</p>
         </div>
