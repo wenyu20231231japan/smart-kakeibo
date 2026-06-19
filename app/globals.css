@@ -478,10 +478,15 @@ select:focus {
 }
 
 .data-safety-header p,
-.data-safety-note {
+.data-safety-note,
+.data-safety-description {
   margin-bottom: 0;
   color: var(--muted);
   font-size: 13px;
+}
+
+.data-safety-description {
+  line-height: 1.55;
 }
 
 .storage-badge {
@@ -509,11 +514,38 @@ select:focus {
 }
 
 .backup-actions .ghost-button {
+  display: grid;
+  align-content: center;
+  gap: 4px;
   width: 100%;
+  min-height: 58px;
+  text-align: left;
+}
+
+.backup-actions small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .backup-file-input {
   display: none;
+}
+
+.advanced-info {
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.advanced-info summary {
+  cursor: pointer;
+}
+
+.advanced-info p {
+  margin: 8px 0 0;
+  word-break: break-word;
 }
 
 .image-upload-row {
