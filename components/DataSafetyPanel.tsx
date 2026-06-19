@@ -9,6 +9,7 @@ type Props = {
   status: StorageStatus;
   recordCount: number;
   localStorageKey: string;
+  compact?: boolean;
   importResult?: {
     importedCount: number;
     skippedCount: number;
@@ -47,16 +48,26 @@ const STATUS_DESCRIPTIONS: Record<StorageStatus, { ja: string; zh: string }> = {
   }
 };
 
-export function DataSafetyPanel({ status, recordCount, localStorageKey, importResult, onExport, onImport }: Props) {
+export function DataSafetyPanel({
+  status,
+  recordCount,
+  localStorageKey,
+  compact = false,
+  importResult,
+  onExport,
+  onImport
+}: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   return (
-    <section className="panel data-safety-panel">
+    <section className={compact ? "data-safety-panel compact" : "panel data-safety-panel"}>
       <div className="data-safety-header">
         <div>
-          <h2>
-            <BilingualText ja="データ保存" zh="数据同步" />
-          </h2>
+          {!compact ? (
+            <h2>
+              <BilingualText ja="データ保存" zh="数据同步" />
+            </h2>
+          ) : null}
           <p>
             <BilingualText ja={STATUS_LABELS[status].ja} zh={STATUS_LABELS[status].zh} />
           </p>

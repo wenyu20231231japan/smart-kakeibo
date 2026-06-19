@@ -432,48 +432,39 @@ export default function Home() {
 
           {session ? (
             <>
-          <DataSafetyPanel
-            status={storageStatus}
-            recordCount={transactions.length}
-            localStorageKey={getLocalStorageKey(session)}
-            importResult={importResult}
-            onExport={handleExportBackup}
-            onImport={handleImportBackup}
-          />
+              {isCloudEnabled ? (
+                <LegacyMigrationPanel
+                  pendingCount={pendingLegacyCount}
+                  isMigrating={isMigrating}
+                  result={migrationResult}
+                  onMigrate={handleMigrateLegacyTransactions}
+                />
+              ) : null}
 
-          {isCloudEnabled ? (
-            <LegacyMigrationPanel
-              pendingCount={pendingLegacyCount}
-              isMigrating={isMigrating}
-              result={migrationResult}
-              onMigrate={handleMigrateLegacyTransactions}
-            />
-          ) : null}
+              <NaturalLanguageInput
+                value={input}
+                onChange={setInput}
+                imageDataUrls={imageDataUrls}
+                isCompressingImage={isCompressingImage}
+                onImagesSelected={handleImagesSelected}
+                onRemoveImage={handleRemoveImage}
+                onParse={handleParse}
+                error={error}
+              />
 
-          <NaturalLanguageInput
-            value={input}
-            onChange={setInput}
-            imageDataUrls={imageDataUrls}
-            isCompressingImage={isCompressingImage}
-            onImagesSelected={handleImagesSelected}
-            onRemoveImage={handleRemoveImage}
-            onParse={handleParse}
-            error={error}
-          />
-
-          <ParsedRecordEditor
-            drafts={drafts}
-            originalText={parsedOriginalText}
-            isSaving={isSaving}
-            onChange={handleDraftChange}
-            onSave={handleSave}
-            onCancel={() => {
-              setDrafts([]);
-              setParsedOriginalText("");
-              setParsedImageDataUrls([]);
-              setError("");
-            }}
-          />
+              <ParsedRecordEditor
+                drafts={drafts}
+                originalText={parsedOriginalText}
+                isSaving={isSaving}
+                onChange={handleDraftChange}
+                onSave={handleSave}
+                onCancel={() => {
+                  setDrafts([]);
+                  setParsedOriginalText("");
+                  setParsedImageDataUrls([]);
+                  setError("");
+                }}
+              />
             </>
           ) : null}
 
@@ -489,6 +480,30 @@ export default function Home() {
               isUpdating={isUpdating}
             />
           )}
+
+          {session ? (
+            <section className="footer-settings">
+              <details>
+                <summary>
+                  <BilingualText ja="設定" zh="设置" />
+                </summary>
+                <details className="settings-data-management">
+                  <summary>
+                    <BilingualText ja="データ管理" zh="数据管理" />
+                  </summary>
+                  <DataSafetyPanel
+                    compact
+                    status={storageStatus}
+                    recordCount={transactions.length}
+                    localStorageKey={getLocalStorageKey(session)}
+                    importResult={importResult}
+                    onExport={handleExportBackup}
+                    onImport={handleImportBackup}
+                  />
+                </details>
+              </details>
+            </section>
+          ) : null}
         </section>
       </div>
     </main>

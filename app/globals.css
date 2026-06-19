@@ -466,6 +466,10 @@ select:focus {
   gap: 12px;
 }
 
+.data-safety-panel.compact {
+  margin-top: 10px;
+}
+
 .data-safety-header {
   display: flex;
   align-items: flex-start;
@@ -546,6 +550,33 @@ select:focus {
 .advanced-info p {
   margin: 8px 0 0;
   word-break: break-word;
+}
+
+.footer-settings {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.footer-settings details {
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+
+.footer-settings details details {
+  margin-top: 10px;
+  border-top: 0;
+  padding: 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.footer-settings summary {
+  cursor: pointer;
+}
+
+.settings-data-management > summary {
+  font-size: 13px;
 }
 
 .image-upload-row {
