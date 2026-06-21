@@ -124,7 +124,7 @@ export default function Home() {
 
   const summary = useMemo(() => calculateMonthlySummary(transactions), [transactions]);
   const selectedTransaction = useMemo(
-    () => sortedTransactions.find((transaction) => transaction.id === selectedTransactionId) ?? sortedTransactions[0],
+    () => sortedTransactions.find((transaction) => transaction.id === selectedTransactionId),
     [selectedTransactionId, sortedTransactions]
   );
   const currentMonth = new Date();
@@ -365,7 +365,7 @@ export default function Home() {
       setStorageStatus(result.mode === "supabase" ? "cloud" : isSupabaseConfigured() ? "fallback" : "local");
       setPendingLegacyCount(result.mode === "supabase" ? getPendingLegacyTransactions(result.transactions).length : 0);
       if (selectedTransactionId === id) {
-        setSelectedTransactionId(result.transactions[0]?.id ?? "");
+        setSelectedTransactionId("");
       }
       setError(result.message ?? "");
     } catch {
@@ -407,14 +407,14 @@ export default function Home() {
           <MonthlySummary summary={summary} />
 
           {!session ? (
-            <section className="panel login-needed-panel">
-              <h2>
-                <BilingualText ja="ログインが必要です" zh="需要登录" />
-              </h2>
-              <p>
-                <BilingualText ja="メールログイン後、クラウドに記録を保存できます。" zh="邮箱登录后，记录会保存到云端。" />
-              </p>
-            </section>
+            <AuthPanel
+              session={session}
+              isConfigured={isAuthConfigured()}
+              isLoading={isLoadingTransactions}
+              message={authMessage}
+              onSendLoginEmail={handleSendLoginEmail}
+              onSignOut={handleSignOut}
+            />
           ) : null}
 
           {session ? (
@@ -450,26 +450,24 @@ export default function Home() {
             <section className="panel empty-detail">
               <p>読み込み中... / 正在读取记账数据...</p>
             </section>
-          ) : (
+          ) : session && selectedTransaction ? (
             <TransactionDetail
-              transaction={session ? selectedTransaction : undefined}
+              transaction={selectedTransaction}
               onDelete={handleDelete}
               onUpdate={handleUpdateTransaction}
               isUpdating={isUpdating}
             />
-          )}
+          ) : null}
 
           {session ? (
-            <section className="footer-settings">
-              <details>
+            <nav className="bottom-nav" aria-label="下方导航">
+              <details className="bottom-nav-item">
                 <summary>
-                  <BilingualText ja="設定" zh="设置" />
+                  <BilingualText ja="ログイン状態" zh="登录状态" />
                 </summary>
-                <details className="settings-account">
-                  <summary>
-                    <BilingualText ja="アカウント" zh="账号" />
-                  </summary>
+                <div className="bottom-nav-panel">
                   <AuthPanel
+                    compact
                     session={session}
                     isConfigured={isAuthConfigured()}
                     isLoading={isLoadingTransactions}
@@ -477,11 +475,14 @@ export default function Home() {
                     onSendLoginEmail={handleSendLoginEmail}
                     onSignOut={handleSignOut}
                   />
-                </details>
-                <details className="settings-data-management">
-                  <summary>
-                    <BilingualText ja="データ管理" zh="数据管理" />
-                  </summary>
+                </div>
+              </details>
+
+              <details className="bottom-nav-item">
+                <summary>
+                  <BilingualText ja="データ管理" zh="数据管理" />
+                </summary>
+                <div className="bottom-nav-panel">
                   {pendingLegacyCount > 0 ? (
                     <LegacyMigrationPanel
                       compact
@@ -500,31 +501,9 @@ export default function Home() {
                     onExport={handleExportBackup}
                     onImport={handleImportBackup}
                   />
-                </details>
+                </div>
               </details>
-            </section>
-          ) : null}
-          {!session ? (
-            <section className="footer-settings">
-              <details>
-                <summary>
-                  <BilingualText ja="設定" zh="设置" />
-                </summary>
-                <details className="settings-account" open>
-                  <summary>
-                    <BilingualText ja="アカウント" zh="账号" />
-                  </summary>
-                  <AuthPanel
-                    session={session}
-                    isConfigured={isAuthConfigured()}
-                    isLoading={isLoadingTransactions}
-                    message={authMessage}
-                    onSendLoginEmail={handleSendLoginEmail}
-                    onSignOut={handleSignOut}
-                  />
-                </details>
-              </details>
-            </section>
+            </nav>
           ) : null}
         </section>
       </div>

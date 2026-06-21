@@ -10,11 +10,20 @@ type Props = {
   isConfigured: boolean;
   isLoading: boolean;
   message: string;
+  compact?: boolean;
   onSendLoginEmail: (email: string) => Promise<void>;
   onSignOut: () => void;
 };
 
-export function AuthPanel({ session, isConfigured, isLoading, message, onSendLoginEmail, onSignOut }: Props) {
+export function AuthPanel({
+  session,
+  isConfigured,
+  isLoading,
+  message,
+  compact = false,
+  onSendLoginEmail,
+  onSignOut
+}: Props) {
   const [email, setEmail] = useState("");
   const [isSending, setIsSending] = useState(false);
 
@@ -34,12 +43,14 @@ export function AuthPanel({ session, isConfigured, isLoading, message, onSendLog
   }
 
   return (
-    <section className="panel auth-panel">
+    <section className={compact ? "auth-panel compact" : "panel auth-panel"}>
       <div className="auth-header">
         <div>
-          <h2>
-            <BilingualText ja="ログイン状態" zh="登录状态" />
-          </h2>
+          {!compact ? (
+            <h2>
+              <BilingualText ja="ログイン状態" zh="登录状态" />
+            </h2>
+          ) : null}
           <p>
             {session ? (
               <BilingualText ja="クラウド家計簿にログイン中" zh="已登录云端账本" />

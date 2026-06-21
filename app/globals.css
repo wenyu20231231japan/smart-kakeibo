@@ -476,6 +476,10 @@ select:focus {
   gap: 12px;
 }
 
+.auth-panel.compact {
+  margin-top: 0;
+}
+
 .auth-header {
   display: flex;
   align-items: flex-start;
@@ -515,6 +519,10 @@ select:focus {
 .login-needed-panel p {
   margin-bottom: 0;
   color: var(--muted);
+}
+
+.workspace-panel > .auth-panel {
+  margin-bottom: 16px;
 }
 
 .migration-panel {
@@ -648,36 +656,46 @@ select:focus {
   word-break: break-word;
 }
 
-.footer-settings {
-  margin-top: 8px;
+.bottom-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 12px;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
   color: var(--muted);
   font-size: 12px;
 }
 
-.footer-settings details {
-  border-top: 1px solid var(--line);
-  padding-top: 10px;
+.bottom-nav-item {
+  position: relative;
 }
 
-.footer-settings details details {
+.bottom-nav-item > summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.bottom-nav-item > summary::-webkit-details-marker {
+  display: none;
+}
+
+.bottom-nav-item > summary .bilingual-ja {
+  font-size: 12px;
+}
+
+.bottom-nav-item > summary .bilingual-zh {
+  font-size: 10px;
+}
+
+.bottom-nav-panel {
+  display: grid;
+  gap: 10px;
+  width: min(100%, 420px);
   margin-top: 10px;
-  border-top: 0;
   padding: 10px;
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.62);
-}
-
-.footer-settings .auth-panel {
-  margin-top: 10px;
-}
-
-.footer-settings summary {
-  cursor: pointer;
-}
-
-.settings-data-management > summary,
-.settings-account > summary {
-  font-size: 13px;
 }
 
 .image-upload-row {
@@ -1091,6 +1109,47 @@ select:focus {
 .recognition-result .bilingual-zh {
   color: var(--muted);
   font-size: 0.72em;
+}
+
+@media (max-width: 639px) {
+  .app-shell {
+    padding-top: 14px;
+  }
+
+  .app-header {
+    padding-bottom: 12px;
+  }
+
+  .summary-grid {
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .summary-item {
+    min-height: 42px;
+    padding: 8px 12px;
+  }
+
+  .summary-item > .bilingual {
+    gap: 1px;
+  }
+
+  .summary-item > .bilingual .bilingual-ja {
+    font-size: 13px;
+  }
+
+  .summary-item > .bilingual .bilingual-zh {
+    font-size: 10px;
+  }
+
+  .summary-item strong {
+    font-size: 18px;
+  }
+
+  .workspace-panel > .auth-panel {
+    margin-bottom: 12px;
+    padding: 14px;
+  }
 }
 
 @media (min-width: 640px) {
